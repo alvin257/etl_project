@@ -1,0 +1,21 @@
+# === Core data processing ===
+pandas>=2.2.3,<3.1
+dask[dataframe]>=2024.5.0
+pyarrow>=15.0.0
+
+# === Distributed / storage ===
+dask[distributed]>=2024.5.0
+s3fs>=2024.6.0
+fsspec>=2024.6.0
+
+# === UI ===
+streamlit>=1.36.0
+plotly>=5.22.0
+
+# === Utils ===
+pyyaml>=6.0.2
+requests>=2.32.0
+tqdm>=4.66.0
+
+# === (Optionnel) pour développement / test ===
+black==24.4.2

@@ -1,0 +1,146 @@
+# =========================
+# CONFIG: NYC Taxi (Yellow)
+# =========================
+dataset_name: nyc_taxi_yellow
+description: NYC TLC Yellow trips (Parquet on AWS Open Data) – 2022 by default
+
+# ---- Source (multi-fichiers / multi-années) ----
+source:
+  kind: parquet          # parquet | csv | json
+  paths:
+    - "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2022-01.parquet"
+  storage_options: {}
+    #anon: true           # accès S3 public sans clé
+  csv_options:           # utilisé seulement si kind=csv
+    sep: ","
+    encoding: "utf-8"
+    header: true
+    infer_datetime: true
+  json_options: {}       # pour kind=json
+
+# ---- Schéma interne (mapping & types) ----
+schema:
+  timestamp_column: tpep_pickup_datetime   # colonne temporelle principale à normaliser
+  rename:            # source -> interne (uniformisation)
+    tpep_pickup_datetime: pickup_datetime
+    tpep_dropoff_datetime: dropoff_datetime
+    trip_distance: trip_distance
+    fare_amount: fare_amount
+    passenger_count: passenger_count
+    PULocationID: PULocationID
+    DOLocationID: DOLocationID
+    payment_type: payment_type
+  dtypes:
+    pickup_datetime: datetime64[ns]
+    dropoff_datetime: datetime64[ns]
+    trip_distance: float64
+    fare_amount: float64
+    passenger_count: float64
+    PULocationID: int64
+    DOLocationID: int64
+    payment_type: int64
+
+# ---- Nettoyage (quality gates) ----
+cleaning_rules:
+  duration_minutes:
+    min: 0.0
+    max: 240.0
+    drop_invalid: true
+  trip_distance:
+    min: 0.0
+    max: 100.0
+    drop_invalid: true
+  fare_amount:
+    min: 0.0
+    max: 500.0
+    drop_invalid: true
+  passenger_count:
+    fillna: 1         # imputation légère (ex: 1 passager par défaut)
+  drop_duplicates:
+    enabled: true
+    key_columns: []   # si vous avez un id unique, mettez-le ici
+
+# ---- Normalisation & features temporelles ----
+time_features:
+  timezone: "America/New_York"
+  derive:
+    year: true
+    month: true
+    dow: true         # day of week
+    hour: true
+    day_bucket:       # catégorisation horaire
+      enabled: true
+      buckets:
+        - { label: "nuit",       start: 0,  end: 6 }
+        - { label: "matin",      start: 6,  end: 12 }
+        - { label: "après-midi", start: 12, end: 18 }
+        - { label: "soir",       start: 18, end: 24 }
+
+# ---- Enrichissements ----
+enrichment:
+  taxi_zones:
+    enabled: true
+    path: "data/sample/taxi_zone_lookup.csv"   # petit CSV local (id -> nom -> borough)
+    on:
+      - { left_key: "PULocationID", right_key: "LocationID", prefix: "PU_" }
+      - { left_key: "DOLocationID", right_key: "LocationID", prefix: "DO_" }
+  calendar:
+    enabled: true
+    holidays_country: "US"     # pour flag is_holiday, is_weekend
+  weather:
+    enabled: false             # optionnel (peut être activé plus tard)
+  rush_hour:
+    enabled: true
+    ranges:
+      - { start: "07:00", end: "10:00" }
+      - { start: "16:00", end: "19:00" }
+
+# ---- Prédictions (optionnelles) ----
+predict:
+  enabled: true
+  mode: "regression_duration"  # regression_duration | regression_fare | demand_forecast | anomalies
+  sample_max_rows: 20000       # échantillon pour l’UI
+  metrics:
+    by: ["hour", "PU_borough"] # agrégation des erreurs par
+
+# ---- Agrégats & exports légers (pour l’UI) ----
+analytics:
+  describe:
+    enabled: true
+    columns: ["fare_amount", "trip_distance", "duration_min", "speed_mph"]
+  groupbys:
+    - { by: ["hour"],         agg: {"fare_amount":"mean","trip_distance":"mean"}, out: "agg_by_hour.parquet" }
+    - { by: ["PU_borough"],   agg: {"fare_amount":"mean","trip_distance":"mean","duration_min":"mean"}, out: "agg_by_borough.parquet" }
+    - { by: ["day_bucket"],   agg: {"fare_amount":"mean","trip_distance":"mean","duration_min":"mean"}, out: "agg_by_bucket.parquet" }
+
+# ---- Écriture (Load) ----
+output:
+  base_dir: "outputs"
+  partitions: ["year","month"]        # et/ou "PU_borough","day_bucket"
+  write_index: false
+  repartition_target_mb: 256          # regrouper pour éviter trop de petits fichiers
+  manifest: true                      # produire outputs/manifest.json
+
+# ---- UI (présélections de graphiques) ----
+ui_presets:
+  kpis:
+    - { label: "Prix moyen ($)",     expr: "mean(fare_amount)" }
+    - { label: "Distance moyenne",    expr: "mean(trip_distance)" }
+    - { label: "Durée moyenne (min)", expr: "mean(duration_min)" }
+  charts:
+    - { title: "Courses par heure",      x: "hour",       y: "count()",     type: "bar" }
+    - { title: "Prix moyen par borough", x: "PU_borough", y: "mean(fare_amount)", type: "bar" }
+    - { title: "Distance vs Prix",       x: "trip_distance", y: "fare_amount", type: "scatter", sample: 5000 }
+
+# ---- Profiling & logs ----
+profiling:
+  record:
+    - "extract_s"
+    - "transform_s"
+    - "predict_s"
+    - "load_s"
+  counters:
+    - "rows_read"
+    - "rows_filtered"
+    - "rows_final"
+    - "n_partitions"
