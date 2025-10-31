@@ -1,0 +1,17 @@
+{
+  "datasets": {
+    "features": {
+      "path": "outputs/features",
+      "partition_on": [
+        "year",
+        "month"
+      ]
+    },
+    "analytics": {
+      "describe": "outputs/analytics/describe.parquet",
+      "gb_0": "outputs/analytics/agg_by_hour.parquet",
+      "gb_1": "outputs/analytics/agg_by_borough.parquet",
+      "gb_2": "outputs/analytics/agg_by_bucket.parquet"
+    }
+  }
+}

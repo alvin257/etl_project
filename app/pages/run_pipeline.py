@@ -2,6 +2,7 @@ import streamlit as st
 import subprocess
 from pathlib import Path
 import time
+import sys
 
 st.title("⚙️ Lancer le pipeline ETL")
 
@@ -16,7 +17,7 @@ if st.button("🚀 Exécuter le pipeline complet"):
         start = time.time()
         try:
             result = subprocess.run(
-                ["python", "-m", "scripts.run_pipeline"],
+                [sys.executable, "-m", "scripts.run_pipeline"],
                 capture_output=True,
                 text=True,
                 check=True
