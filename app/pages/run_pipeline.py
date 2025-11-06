@@ -10,7 +10,7 @@ st.title("⚙️ Lancer le pipeline ETL")
 manifest_path = Path("outputs/manifest.json")
 
 if st.button("🚀 Exécuter le pipeline complet"):
-    st.info("Le pipeline est en cours d'exécution...")
+    st.toast("⚙️ Chargement des fichiers en cours...", icon="🕒")
 
     # Lance le script en subprocess (équivalent à python -m scripts.run_pipeline)
     with st.spinner("Pipeline en cours..."):

@@ -1,0 +1,9 @@
+{
+  "files_count": 1,
+  "partitions_count": 1,
+  "resolve_files_s": 0.0,
+  "read_lazy_s": 7.29,
+  "normalize_schema_s": 0.353,
+  "early_time_filter_s": 0.0,
+  "preview_s": 35.402
+}
