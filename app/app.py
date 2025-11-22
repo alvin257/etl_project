@@ -14,90 +14,75 @@ st.set_page_config(
 # =======================
 # HEADER
 # =======================
-st.title("⚙️ Pipeline ETL Dashboard")
+st.title("⚙️ ETL Pipeline Dashboard")
 st.markdown(
     """
     <div style='font-size:18px;'>
-    Bienvenue dans votre interface **ETL pédagogique et interactive**.<br>
-    Cette application illustre pas à pas le fonctionnement d’un pipeline ETL moderne :
+    Bienvenue dans votre interface **ETL pédagogique et interactive** 🎓<br><br>
+    Cette application illustre le fonctionnement complet d’un pipeline **ETL (Extract – Transform – Load)**, 
+    depuis la collecte de données jusqu’à leur visualisation et analyse.
     </div>
     """,
     unsafe_allow_html=True,
+)
+st.markdown("---")
+
+# =======================
+# VISUEL DU PIPELINE
+# =======================
+st.subheader("🧩 Schéma général du pipeline ETL")
+
+st.image(
+    "app/images/etl_schema.png",
+    caption="Représentation visuelle du processus ETL : Extract → Transform → Load",
+    use_container_width=True
 )
 
 st.markdown("---")
 
 # =======================
-# ÉTAPE 1 : SCHÉMA VISUEL ETL
+# DESCRIPTION DU PROJET
 # =======================
+st.subheader("🧠 À propos du projet")
+st.markdown(
+    """
+    Ce projet a pour but de **montrer comment un pipeline ETL peut être parallélisé, 
+    monitoré et visualisé** à l’aide d’outils modernes.
 
-st.image("app\images\etl_schema.png", caption="Schéma du pipeline ETL", use_container_width=True)
+    ### 🔧 Technologies principales
+    - **🐍 Python** – langage principal du projet  
+    - **⚙️ Dask** – traitement parallèle et scalable des gros volumes  
+    - **📄 YAML** – configuration du pipeline sans modification du code  
+    - **💻 Streamlit** – interface de pilotage et de visualisation interactive  
 
-col1, col2, col3 = st.columns(3)
+    ### 📦 Données utilisées
+    Le dataset de test est celui des **trajets de taxis de New York (NYC TLC – AWS Open Data)**.  
+    Chaque fichier représente un mois complet de courses, utilisé ici pour illustrer un cas d’usage concret 
+    de **nettoyage, transformation et analyse de données massives**.
+    """
+)
 
-with col1:
-    st.subheader("📥 Extract")
-    st.markdown("""
-    - Lecture de données **massives**
-    - Chargement parallèle via **Dask**
-    - Uniformisation du schéma
-    """)
-with col2:
-    st.subheader("🔄 Transform")
-    st.markdown("""
-    - Nettoyage, normalisation, enrichissement  
-    - Calcul de **durées, distances, zones, horaires**
-    - Profiling et validation des données
-    """)
-with col3:
-    st.subheader("📦 Load")
-    st.markdown("""
-    - Sauvegarde au format **Parquet**
-    - Création de **rapports et agrégats**
-    - Génération du **manifest.json** pour le dashboard
-    """)
 
 st.markdown("---")
 
 # =======================
-# ÉTAPE 2 : EXPLICATION DU PROJET
-# =======================
-with st.expander("🧠 Comprendre ce projet (pour les curieux)", expanded=True):
-    st.markdown("""
-    Ce projet a pour objectif de **montrer comment un pipeline ETL peut être parallélisé et monitoré** grâce à :
-    - **Dask** → pour paralléliser les traitements sur des fichiers volumineux
-    - **YAML** → pour configurer le pipeline sans changer le code
-    - **Streamlit** → pour visualiser et contrôler le processus en temps réel
-
-    Le dataset de test utilisé est le jeu de données  **NYC Taxi (AWS Open Data)** :  
-    chaque fichier représente un mois de trajets de taxis à New York 🗽
-    """)
-
-st.markdown("---")
-
-# =======================
-# ÉTAPE 3 : MANIFEST / RÉSULTATS
+# MANIFEST (résultats s’ils existent déjà)
 # =======================
 st.subheader("📊 Résultats du pipeline (manifest.json)")
 
 manifest_path = Path("outputs/manifest.json")
 
-if not manifest_path.exists():
-    st.warning("Aucun manifest trouvé. Lancez le pipeline depuis l’onglet **Run Pipeline** à gauche.")
-    st.stop()
+if manifest_path.exists() and manifest_path.stat().st_size > 0:
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        st.success("Manifest chargé ✅")
+        st.json(manifest)
+    except json.JSONDecodeError:
+        st.error("Le fichier manifest.json semble corrompu. Relancez le pipeline pour le régénérer.")
+else:
 
-if manifest_path.stat().st_size == 0:
-    st.error("Le fichier manifest.json est vide. Exécutez le pipeline pour le régénérer.")
-    st.stop()
-
-try:
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        manifest = json.load(f)
-    st.success("Manifest chargé ✅")
-    st.json(manifest)
-except json.JSONDecodeError:
-    st.error("Le manifest est corrompu. Relancez le pipeline.")
-    st.stop()
+    st.info("Aucun manifest trouvé pour l’instant. Lancez le pipeline depuis la page **🚀 Lancer le pipeline** pour générer les résultats.")
 
 # =======================
 # FOOTER

@@ -7,7 +7,7 @@ import plotly.express as px
 # CONFIGURATION
 # ======================
 st.set_page_config(page_title="Agrégats et Visualisations", page_icon="📈", layout="wide")
-st.title("📈 Visualisation des agrégats")
+st.title("📈 Visualisation des agrégats: BROUILLON")
 
 with st.sidebar:
     st.markdown("### 📊 Navigation")

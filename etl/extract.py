@@ -6,8 +6,11 @@ from typing import Any, Dict, List, Tuple
 
 import dask.dataframe as dd
 import pandas as pd
+import time
+import dask
+dask.config.set(scheduler='threads')
 
-from etl.utils import get_logger, load_yaml, write_json, ensure_dir, time_block
+from etl.utils import get_logger, load_yaml, write_json, ensure_dir, time_block, log_progress
 
 logger = get_logger("etl.extract")
 
@@ -25,6 +28,9 @@ def run_extract(config_path: str) -> Dict[str, Any]:
     - writes preview & metrics reports
     Returns dict with references for the next stage.
     """
+    # === 0% — Initialisation ===
+    log_progress("EXTRACT", 0, "Initialisation de l'étape Extract...")
+
     cfg = _normalize_cfg(load_yaml(config_path))
     _validate_cfg(cfg)
 
@@ -32,6 +38,9 @@ def run_extract(config_path: str) -> Dict[str, Any]:
     preview_path = Path("outputs/sample_preview.parquet")
     schema_report_path = metrics_dir / "schema_report.json"
     extract_metrics_path = metrics_dir / "extract_metrics.json"
+
+    # === 10% — Résolution des fichiers ===
+    log_progress("EXTRACT", 10, "Résolution des fichiers sources...")
 
     # resolve concrete file list (for error messages & metrics)
     with time_block() as t_files:
@@ -42,6 +51,7 @@ def run_extract(config_path: str) -> Dict[str, Any]:
         msg = "No source files matched the provided patterns."
         logger.error(msg)
         write_json({"error": msg}, extract_metrics_path)
+        log_progress("EXTRACT", 100, "Aucun fichier trouvé ❌ — fin prématurée.")
         return {
             "status": "error",
             "message": msg,
@@ -49,23 +59,37 @@ def run_extract(config_path: str) -> Dict[str, Any]:
             "extract_metrics_path": str(extract_metrics_path),
             "schema_report_path": str(schema_report_path),
         }
-
+    
+    # === 30% — Lecture paresseuse (lazy load) ===
+    log_progress("EXTRACT", 30, f"Lecture des fichiers ({len(files)}) via Dask...")
     # lazy read
     with time_block() as t_read:
         ddf = read_lazy_dataframe(cfg, files)
+    log_progress("EXTRACT", 45, "Lecture terminée ✅")
 
+    # === 55% — Normalisation du schéma ===
+    log_progress("EXTRACT", 55, "Normalisation du schéma et des types...")
     # normalize schema
     with time_block() as t_norm:
         ddf, schema_report = normalize_schema(ddf, cfg)
+    log_progress("EXTRACT", 70, "Schéma normalisé ✅")
 
+    # === 75% — Filtrage temporel optionnel ===
+    log_progress("EXTRACT", 75, "Application du filtre temporel (si défini)...")
     # optional early filter on time (pushdown when possible)
     with time_block() as t_early:
         ddf = optional_time_filter(ddf, cfg)
+    log_progress("EXTRACT", 80, "Filtrage terminé ✅")
 
+    # === 85% — Génération d’un aperçu ===
+    log_progress("EXTRACT", 85, "Création d’un échantillon preview...")
     # preview (small materialization only)
     with time_block() as t_prev:
-        prev_info = make_preview(ddf, preview_path.as_posix(), max_rows=200)
+        prev_info = make_preview(ddf, preview_path.as_posix(), max_rows=15)
+    log_progress("EXTRACT", 90, f"Aperçu sauvegardé → {prev_info['path']}")
 
+    # === 95% — Collecte et écriture des métriques ===
+    log_progress("EXTRACT", 95, "Collecte et écriture des métriques...")
     # collect & write metrics
     metrics = collect_extract_metrics(
         ddf,
@@ -88,6 +112,9 @@ def run_extract(config_path: str) -> Dict[str, Any]:
         t_read["seconds"],
         t_norm["seconds"],
     )
+
+    log_progress("EXTRACT", 100, "Étape Extract terminée ✅")
+    print("==> EXTRACT done")  # pour signaler à Streamlit la fin d'étape
 
     return {
         "status": "ok",
@@ -137,19 +164,28 @@ def resolve_sources(cfg: Dict[str, Any]) -> List[str]:
     return paths
 
 
-def read_lazy_dataframe(cfg: Dict[str, Any], files: List[str]) -> dd.DataFrame:
+def read_lazy_dataframe(cfg, files):
     kind = cfg["source"]["kind"].lower()
     storage_opts = cfg["source"]["storage_options"]
 
+    log_progress("EXTRACT", 15, f"Lecture des fichiers {len(files)} via Dask...")
+    time.sleep(0.5)
+
     if kind == "parquet":
         ddf = dd.read_parquet(files, storage_options=storage_opts)
+        log_progress("EXTRACT", 25, f"Lecture paresseuse prête ({ddf.npartitions} partitions)")
+        _ = ddf.head(10)
+        log_progress("EXTRACT", 30, "Lecture test (10 lignes) effectuée ✅")
     elif kind == "csv":
         csv_opts = cfg["source"]["csv_options"]
-        # ensure dates are parsed later by normalize if needed
+        log_progress("EXTRACT", 20, "Lecture CSV...")
         ddf = dd.read_csv(files, storage_options=storage_opts, **csv_opts)
+        log_progress("EXTRACT", 30, f"CSV chargé : {ddf.npartitions} partitions.")
     elif kind == "json":
         json_opts = cfg["source"]["json_options"]
+        log_progress("EXTRACT", 20, "Lecture JSON...")
         ddf = dd.read_json(files, storage_options=storage_opts, **json_opts)
+        log_progress("EXTRACT", 30, f"JSON chargé : {ddf.npartitions} partitions.")
     else:
         raise ValueError(f"Unsupported source.kind: {kind}")
 

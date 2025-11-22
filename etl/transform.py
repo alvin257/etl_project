@@ -5,8 +5,9 @@ from typing import Any, Dict, Tuple
 
 import dask.dataframe as dd
 import pandas as pd
+import time
 
-from etl.utils import get_logger, ensure_dir, write_json
+from etl.utils import get_logger, ensure_dir, write_json, log_progress
 
 logger = get_logger("etl.transform")
 
@@ -26,31 +27,56 @@ def run_transform(
       - enrichissements (zones taxi, calendrier, rush_hour)
     Retourne un dict avec ddf_features (Dask DataFrame) et chemin métriques.
     """
+    start_time = time.time()  # 🕒 début du chronomètre
     ensure_dir("outputs/metrics")
+    log_progress("TRANSFORM", 0, "Initialisation de l'étape Transform...")
 
-    # 1) Features de base (toujours utiles)
+    metrics = {}
+
+    # 1️⃣ Features de base
+    t0 = time.time()
+    log_progress("TRANSFORM", 10, "Ajout des features de base (durée, vitesse)...")
     ts_pickup = _ts_col(cfg, "pickup_datetime")
     ts_drop = _ts_col(cfg, "dropoff_datetime")
     ddf = _add_basic_features(ddf, ts_pickup, ts_drop)
+    log_progress("TRANSFORM", 25, "Features de base ajoutées ✅")
+    metrics["add_features_s"] = round(time.time() - t0, 3)
 
-    # 2) Nettoyage
+    # 2️⃣ Nettoyage
+    t0 = time.time()
+    log_progress("TRANSFORM", 30, "Nettoyage des données (valeurs aberrantes, NA, doublons)...")
     ddf, counters_clean = _apply_cleaning(ddf, cfg)
+    log_progress("TRANSFORM", 45, "Nettoyage terminé ✅")
+    metrics["cleaning_s"] = round(time.time() - t0, 3)
 
-    # 3) Normalisation temporelle
+    # 3️⃣ Normalisation temporelle
+    t0 = time.time()
+    log_progress("TRANSFORM", 55, "Normalisation temporelle (year, month, hour, etc.)...")
     ddf = _apply_time_features(ddf, cfg)
+    log_progress("TRANSFORM", 70, "Normalisation terminée ✅")
+    metrics["time_features_s"] = round(time.time() - t0, 3)
 
-    # 4) Enrichissements
+    # 4️⃣ Enrichissements
+    t0 = time.time()
+    log_progress("TRANSFORM", 75, "Enrichissement des données (zones, calendrier, rush hour)...")
     ddf = _apply_enrichments(ddf, cfg)
+    log_progress("TRANSFORM", 95, "Enrichissement terminé ✅")
+    metrics["enrichment_s"] = round(time.time() - t0, 3)
 
-    # Métriques (on évite les compute coûteux; on fait au moins un comptage)
-    metrics = {
-        "rows_after_clean_est": _safe_len_estimate(ddf),
-        "counters_clean": counters_clean,
-        "columns": list(ddf.columns),
-    }
+    # ✅ Fin et métriques
+
+    # Durée totale
+    metrics["duration_s"] = round(time.time() - start_time, 3)
+    metrics["rows_after_clean_est"] = _safe_len_estimate(ddf)
+    metrics["counters_clean"] = counters_clean
+    metrics["columns"] = list(ddf.columns)
+
     write_json(metrics, out_metrics_path)
-    logger.info("TRANSFORM done | approx rows: %s", metrics["rows_after_clean_est"])
 
+    log_progress("TRANSFORM", 100, "Étape Transform terminée ✅")
+    print("==> TRANSFORM done")
+
+    logger.info("TRANSFORM done | approx rows: %s", metrics["rows_after_clean_est"])
     return {"status": "ok", "ddf_features": ddf, "transform_metrics_path": out_metrics_path}
 
 
@@ -208,9 +234,6 @@ def _apply_enrichments(ddf: dd.DataFrame, cfg: Dict[str, Any]) -> dd.DataFrame:
 
 def _safe_len_estimate(ddf: dd.DataFrame) -> str:
     try:
-        # on évite len(ddf); on peut faire un petit compute tard si nécessaire dans l'UI
-        est = ddf.map_partitions(lambda pdf: len(pdf)).head(1)
-        # head(1) renvoie un petit Series; on signale que c'est une estimation
-        return "unknown_or_large"
+        return int(ddf.shape[0].compute())
     except Exception:
-        return "unknown_or_large"
+        return -1  # "unknown"

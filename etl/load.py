@@ -6,8 +6,9 @@ from typing import Any, Dict, List
 
 import dask.dataframe as dd
 import pandas as pd
+import time 
 
-from etl.utils import get_logger, ensure_dir, write_json
+from etl.utils import get_logger, ensure_dir, write_json, log_progress
 
 logger = get_logger("etl.load")
 
@@ -21,6 +22,10 @@ def run_load(
     Écrit les tables finales (Parquet partitionné) et les exports analytics légers,
     puis génère un manifest JSON lisible par l'UI.
     """
+    start_time = time.time()  # 🕒 début du chronomètre
+    log_progress("LOAD", 0, "Initialisation de l'étape Load...")
+    metrics = {}
+
     out_cfg = cfg.get("output", {}) or {}
     base_dir = base_dir or out_cfg.get("base_dir", "outputs")
     partitions: List[str] = out_cfg.get("partitions", []) or []
@@ -30,33 +35,53 @@ def run_load(
 
     base = ensure_dir(base_dir)
 
-    # 1) (Optionnel) regrouper pour éviter des milliers de petits fichiers
+    # 1️⃣ Repartition optionnelle
+    t0 = time.time()
+    log_progress("LOAD", 10, "Repartition des données si nécessaire...")
     if repartition_mb and hasattr(ddf_features, "repartition"):
-        # règle simple : approx 128MB par partition si non précisé
         target = max(1, repartition_mb // 128)
         try:
             ddf_features = ddf_features.repartition(npartitions=target)
-        except Exception:
-            pass
+            log_progress("LOAD", 20, f"Repartition effectuée ({target} partitions) ✅")
+        except Exception as e:
+            logger.warning(f"Repartition skipped: {e}")
+    time.sleep(0.2)
+    metrics["repartition_s"] = round(time.time() - t0, 3)
 
-    # 2) Écriture Parquet partitionnée
+    # 2️⃣ Écriture Parquet
+    t0 = time.time()
+    log_progress("LOAD", 30, "Écriture des fichiers Parquet partitionnés...")
     clean_dir = ensure_dir(base / "clean")
     features_dir = ensure_dir(base / "features")
-
-    # Ici, on écrit la table "features" (post-transform) ; "clean" serait utilisé si tu sépares plus tôt.
     _to_parquet_partitioned(ddf_features, features_dir.as_posix(), partitions, write_index)
+    log_progress("LOAD", 50, f"Fichiers Parquet écrits dans {features_dir} ✅")
+    metrics["write_parquet_s"] = round(time.time() - t0, 3)
 
-    # 3) Exports analytics (légers pour l’UI)
+    # 3️⃣ Exports analytics
+    t0 = time.time()
+    log_progress("LOAD", 60, "Génération des exports analytics (describe, groupby)...")
     analytics_dir = ensure_dir(base / "analytics")
     analytics_cfg = (cfg.get("analytics") or {})
     _write_describe(ddf_features, analytics_cfg, analytics_dir)
     _write_groupbys(ddf_features, analytics_cfg, analytics_dir)
+    log_progress("LOAD", 80, "Exports analytics générés ✅")
+    metrics["analytics_s"] = round(time.time() - t0, 3)
 
-    # 4) Manifest
+    # 4️⃣ Manifest
+    t0 = time.time()
+    log_progress("LOAD", 85, "Génération du manifest.json...")
     manifest_path = Path(base) / "manifest.json"
     manifest = _build_manifest(base_dir, partitions, analytics_cfg)
     if make_manifest:
+        metrics["manifest_s"] = round(time.time() - t0, 3)
+        metrics["duration_s"] = round(time.time() - start_time, 3)
+        manifest["metrics"] = metrics
         write_json(manifest, manifest_path)
+        log_progress("LOAD", 95, "Manifest sauvegardé ✅")
+
+    # ✅ Fin
+    log_progress("LOAD", 100, "Étape Load terminée ✅")
+    print("==> LOAD done")
 
     logger.info("LOAD done | base_dir=%s", base_dir)
     return {
