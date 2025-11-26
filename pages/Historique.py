@@ -39,9 +39,9 @@ for res_file in history:
         with col3:
             if st.button(f"👁 Voir résultats", key=f"view_{run_id}"):
                 st.session_state.results = data
-                st.switch_page("streamlit_app_v3.py")
+                st.switch_page("streamlit_app.py")
 
         with col4:
             if st.button(f"▶️ Rejouer", key=f"rerun_{run_id}"):
                 st.session_state.yaml_to_load = yaml_path
-                st.switch_page("streamlit_app_v3.py")
+                st.switch_page("streamlit_app.py")
