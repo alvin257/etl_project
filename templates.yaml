@@ -1,0 +1,140 @@
+# =====================================================
+# TEMPLATE UNIVERSEL - Pipeline ETL Configurable
+# =====================================================
+# 
+# 📖 INSTRUCTIONS :
+# 1. Activez/désactivez avec "enabled: true/false"
+# 2. Modifiez les valeurs selon vos besoins
+# 3. Supprimez les sections dont vous n'avez pas besoin
+# 4. Cliquez sur "🚀 Lancer le Pipeline"
+#
+# 💡 CONSEIL : Commencez par activer une seule transformation
+#              puis ajoutez-en progressivement
+#
+# =====================================================
+
+# ========== SOURCE DES DONNÉES ==========
+source:
+  type: csv                           # Types supportés : csv | parquet | url
+  path: ""  # Chemin vers votre fichier
+
+
+# ========== TRANSFORMATIONS ==========
+transforms:
+
+  # --------------------------------------------------
+  # 1. NETTOYAGE - Supprimer les valeurs nulles
+  # --------------------------------------------------
+  clean_nulls:
+    enabled: true                     # Activez cette transformation
+    columns: []              # Colonnes à vérifier (suppr. ligne si null)
+    # Exemples :
+    # columns: [id]                   # Juste l'ID
+    # columns: [id, date, price]      # Plusieurs colonnes
+    # columns: []                     # Toutes les colonnes
+
+
+  # --------------------------------------------------
+  # 2. CALCULS - Créer de nouvelles colonnes
+  # --------------------------------------------------
+  calculate:
+    enabled: true                     # Activez cette transformation
+    new_columns:
+      # Colonne 1
+      - name:     # Nom de la nouvelle colonne
+        formula:  # Formule (+ - * / et constantes)
+      
+      # Ajoutez d'autres colonnes ici :
+      # - name: discounted_price
+      #   formula: price * 0.9
+      # - name: tax_amount
+      #   formula: total_amount * 0.2
+      # - name: final_price
+      #   formula: (price + tax_amount) * quantity
+
+
+  # --------------------------------------------------
+  # 3. FILTRAGE - Garder seulement certaines lignes
+  # --------------------------------------------------
+  filter:
+    enabled: false                    # ⚠️ DÉSACTIVÉ par défaut
+    conditions:
+      # Condition 1
+      - column:           # Colonne à tester
+        operator:         # Opérateurs : "==" "!=" ">" "<" ">=" "<="
+        value:            # Valeur de comparaison
+      
+      # Ajoutez d'autres conditions (toutes doivent être vraies) :
+      # - column: price
+      #   operator: ">"
+      #   value: 0
+      # - column: quantity
+      #   operator: ">="
+      #   value: 1
+      # - column: region
+      #   operator: "=="
+      #   value: "Paris"
+
+
+  # --------------------------------------------------
+  # 4. AGRÉGATIONS - Grouper et calculer des stats
+  # --------------------------------------------------
+  aggregate:
+    enabled: false                    # ⚠️ DÉSACTIVÉ par défaut
+    groupby: []               # Colonnes de regroupement
+    metrics:
+      # Format : colonne: fonction
+      price:                      # Fonctions : sum, mean, count, min, max
+      quantity: 
+      total_amount:
+      # Autres exemples :
+      # id: count                     # Compter le nombre de lignes
+      # price: min                    # Prix minimum
+      # price: max                    # Prix maximum
+
+
+  # --------------------------------------------------
+  # 5. DATES - Extraire des informations de dates
+  # --------------------------------------------------
+  date_features:
+    enabled: false                    # ⚠️ DÉSACTIVÉ par défaut
+    column:                      # Colonne contenant les dates
+    extract:
+      -                          
+      # Décommentez ce dont vous avez besoin :
+      # - day                         # Jour (1-31)
+      # - day_of_week                 # Jour de la semaine (0-6)
+      # - week                        # Numéro de semaine (1-52)
+      # - quarter                     # Trimestre (1-4)
+      # - year                          # Année (2024)
+      # - month                         # Mois (1-12)
+
+
+# ========== SORTIE ==========
+output:
+  format: parquet                     # Formats : parquet (par défaut) | csv
+  path: "data/processed/result"      # même chemin de sortie (dossier créé auto) à ne pas modifier
+
+
+# ========== CONFIGURATION CLUSTER DASK ==========
+dask:
+  workers:                           # Nombre de workers (1-8)
+  memory_per_worker:           # Mémoire par worker : "512MB" | "1GB" | "2GB"
+  
+  
+
+# =====================================================
+# EXEMPLES DE CONFIGURATIONS
+# =====================================================
+
+# --- Exemple 1 : Nettoyage Simple ---
+# Garder seulement clean_nulls et calculate
+# Supprimer filter, aggregate, date_features
+
+# --- Exemple 2 : Analyse Complète ---
+# Activer toutes les transformations (enabled: true)
+
+# --- Exemple 3 : Juste Conversion CSV → Parquet ---
+# Désactiver toutes les transformations (enabled: false)
+
+# =====================================================

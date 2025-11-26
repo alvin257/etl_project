@@ -27,7 +27,7 @@ wheels/
 
 # Environnements
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -35,7 +35,7 @@ env.bak/
 venv.bak/
 
 # Fichiers de données
-outputs/
+data/processed/
 *.parquet
 *.log
 *.csv
