@@ -114,6 +114,8 @@ etl-pipeline-dask/
 ├── etl_pipeline_yaml.py         # Pipeline ETL
 ├── streamlit_app.py             # Interface Streamlit
 ├── metrics_page.py              # Vue des métriques après le lancement du pipeline
+├── Slide_ETL.pdf                # Slides de la présentation
+├── Demo.mp4                     # Vidéo de démonstration
 ├── docs/
     ├── guide.md                 # Documentation pour les fichiers de configurations du pipeline
 └── data/
