@@ -34,21 +34,30 @@ class YAMLETLPipeline:
         self.config = config
 
         dask_cfg = config.get("dask", {})
-        n_workers = int(dask_cfg.get("workers", 4))
-        threads = int(dask_cfg.get("threads", 2))
-        memory = dask_cfg.get("memory_per_worker", "1GB")
 
-        logger.info(
-            f"🚀 Creating Dask Cluster: {n_workers} workers × {threads} threads × {memory}/worker"
-        )
+        # 🧠 MODE 1 : l'utilisateur a donné une config → on respecte
+        if isinstance(dask_cfg, dict) and any(dask_cfg.values()):
+            n_workers = int(dask_cfg.get("workers", 4))
+            threads = int(dask_cfg.get("threads", 2))
+            memory = dask_cfg.get("memory_per_worker", "1GB")
 
-        self.client = Client(
-            n_workers=n_workers,
-            threads_per_worker=threads,
-            memory_limit=memory,
-            dashboard_address=":8787",
-            processes=True,
-        )
+            logger.info(
+                f"🚀 Creating Dask Cluster: {n_workers} workers × {threads} threads × {memory}/worker"
+            )
+
+            self.client = Client(
+                n_workers=n_workers,
+                threads_per_worker=threads,
+                memory_limit=memory,
+                dashboard_address=":8787",
+                processes=True,
+            )
+        
+        # 🧠 MODE 2 : rien n'est spécifié → Dask auto-configure
+        else:
+            logger.info("⚙️ Pas de Cluster Dask spécifié dans le YAML → fallback to auto LocalCluster()")
+            self.client = Client()  # AUTO MODE 😎
+            time.sleep(1)
 
         logger.info(f"📊 Dashboard: {self.client.dashboard_link}")
 
@@ -78,6 +87,15 @@ class YAMLETLPipeline:
 
         elif ftype == "json":
             return dd.read_json(file_list, blocksize="64MB")
+        
+        elif ftype == "csv":
+            return dd.read_csv(
+                file_list,
+                blocksize=None,   # IMPORTANT pour gzip
+                compression="gzip",
+                assume_missing=True,
+                storage_options={"anon": True}
+            )
 
         else:
             raise ValueError(f"Format non supporté : {ftype}")
@@ -113,6 +131,22 @@ class YAMLETLPipeline:
                 mapping = cfg.get("mapping", {})
                 if mapping:
                     ddf = ddf.rename(columns=mapping)
+            
+            # ------- date_features -------
+            elif name == "date_features":
+                col = cfg.get("column")
+                parts = cfg.get("extract", [])
+                if col:
+                    logger.info(f"  → Date features from {col}")
+                    ddf[col] = dd.to_datetime(ddf[col], errors="coerce")
+                    if "year" in parts:
+                        ddf["year"] = ddf[col].dt.year
+                    if "month" in parts:
+                        ddf["month"] = ddf[col].dt.month
+                    if "day" in parts:
+                        ddf["day"] = ddf[col].dt.day
+                    if "hour" in parts:
+                        ddf["hour"] = ddf[col].dt.hour
 
             # ------- filter -------
             elif name == "filter":
@@ -145,20 +179,10 @@ class YAMLETLPipeline:
 
                 ddf = ddf.reset_index()
 
-            # ------- date_features -------
-            elif name == "date_features":
-                col = cfg.get("column")
-                parts = cfg.get("extract", [])
-                if col:
-                    logger.info(f"  → Date features from {col}")
-                    ddf[col] = dd.to_datetime(ddf[col], errors="coerce")
-                    if "year" in parts:
-                        ddf["year"] = ddf[col].dt.year
-                    if "month" in parts:
-                        ddf["month"] = ddf[col].dt.month
-                    if "day" in parts:
-                        ddf["day"] = ddf[col].dt.day
-
+        # 🔥 On déclenche l'exécution après les transformations
+        logger.info("⚡ Persisting transformed DataFrame (executing all transforms)")
+        ddf = ddf.persist()   # 👉 TRÈS IMPORTANT
+            
         return ddf
 
 

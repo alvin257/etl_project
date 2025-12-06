@@ -67,7 +67,7 @@ def show_editor_view():
         default_yaml = """# Template de configuration YAML pour le pipeline ETL
 source:
   type: csv
-  path: "data/raw/ecommerce_1M.csv"
+  path: "data/raw/ecommerce_data.csv"
 
 transforms:
   clean_nulls:
@@ -79,8 +79,9 @@ output:
   path: "data/processed/result"
 
 dask:
-  workers: 4
+  workers: 2
   memory_per_worker: "1GB"
+  threads_per_worker: 2
 """
     
     # Éditeur YAML
@@ -248,8 +249,19 @@ def show_pipeline_plan(config: dict):
     
     # Cluster
     st.markdown("**🖥️ Cluster Dask**")
-    dask_cfg = config.get('dask', {})
-    st.code(f"{dask_cfg.get('workers', 4)} workers × {dask_cfg.get('memory_per_worker', '1GB')}")
+    dask_cfg = config.get("dask")
+
+    if not dask_cfg:
+        st.info(
+            "⚙️ Aucun paramètre Dask spécifié.\n"
+            "➡️ Le cluster sera configuré automatiquement par Dask (workers, threads, mémoire)."
+        )
+    else:
+        workers = dask_cfg.get("workers", "auto")
+        mem = dask_cfg.get("memory_per_worker", "auto")
+        threads = dask_cfg.get("threads", "auto")
+
+        st.code(f"{workers} workers × {threads} threads × {mem} / worker")
 
 
 def run_pipeline(config: dict, yaml_text: str):
